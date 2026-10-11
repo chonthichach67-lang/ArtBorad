@@ -39,7 +39,7 @@ class _Grid extends CustomPainter {
 
 // ───────── Models ─────────
 class Game {
-  String name, desc, diff, img; // img = path รูปใน assets เช่น assets/games/codenames.png (ว่าง = แสดงกรอบเปล่า)
+  String name, desc, diff, img;
   int min, max, mins;
   Game(this.name, this.desc, this.min, this.max, this.diff, this.mins, [this.img = '']);
 }
@@ -73,11 +73,16 @@ bool sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month &
 String fmtD(DateTime d) => '${d.day}/${d.month}/${d.year}';
 String fmtT(int s, int h) => '${s.toString().padLeft(2, '0')}:00-${(s + h).toString().padLeft(2, '0')}:00';
 
-// ───────── State (in-memory; swap for Firebase/REST later) ─────────
+// ───────── State ─────────
 class S extends ChangeNotifier {
   static final i = S._();
   S._();
-  final users = <U>[U('admin', 'admin', admin: true)];
+  final users = <U>[
+    U('admin', 'admin', admin: true),
+    U('user1', '1234', phone: '0812345678', email: 'user1@gmail.com'),
+    U('somchai', '123456', phone: '0898765432', email: 'somchai@email.com'),
+    U('mairoo', 'mairoo123M', phone: '0610000001', email: 'mairo0123@gmail.com'),
+  ];
   U? me;
   final bookings = <B>[];
   final chats = <U, List<M>>{};
@@ -149,7 +154,7 @@ Widget chip(IconData i, String t) => Container(
 
 void snack(BuildContext c, String t) => ScaffoldMessenger.of(c).showSnackBar(SnackBar(content: Text(t)));
 
-/// โลโก้ร้าน ARTBOARD (assets/logo.png) — ถ้าหาไฟล์ไม่เจอจะแสดงกรอบเปล่าแทน
+/// โลโก้ร้าน ARTBOARD (assets/images/logo.jpg)
 class Logo extends StatelessWidget {
   final double size;
   const Logo(this.size, {super.key});
@@ -157,7 +162,7 @@ class Logo extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
       width: size,
       height: size,
-      child: Image.asset('assets/logo.png',
+      child: Image.asset('assets/images/logo.jpg',
           fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
           errorBuilder: (_, __, ___) => Container(
@@ -265,7 +270,8 @@ class _LoginState extends State<Login> {
                     height: 48,
                     child: FilledButton(
                         onPressed: () {
-                          final u = S.i.users.where((x) => x.name == n.text.trim() && x.pass == p.text).firstOrNull;
+                          final matches = S.i.users.where((x) => x.name == n.text.trim() && x.pass == p.text).toList();
+                          final u = matches.isNotEmpty ? matches.first : null;
                           u == null ? snack(context, 'ชื่อหรือรหัสผ่านไม่ถูกต้อง') : enter(context, u);
                         },
                         child: const Text('เข้าสู่ระบบ'))),
@@ -458,10 +464,13 @@ class _BookPageState extends State<BookPage> {
           card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('รายละเอียดราคา', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
-            const Text('• รายชั่วโมง  35 บาท / คน / ชั่วโมง', style: TextStyle(color: Colors.white70)),
-            const Text('• เหมาวัน  135 บาท / คน', style: TextStyle(color: Colors.white70)),
+            const Text('• รายชั่วโมง 35 บาท / คน / ชั่วโมง', style: TextStyle(color: Colors.white70)),
+            const Text('• เหมาวัน 135 บาท / คน', style: TextStyle(color: Colors.white70)),
             const Divider(),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('ราคาที่ต้องชำระ'), Text('${base - disc} บาท', style: const TextStyle(color: acc, fontSize: 20, fontWeight: FontWeight.w900))]),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('ราคาที่ต้องชำระ'),
+              Text('${base - disc} บาท', style: const TextStyle(color: acc, fontSize: 20, fontWeight: FontWeight.w900))
+            ]),
           ])),
           card(Column(children: [
             ListTile(
@@ -523,43 +532,43 @@ class Summary extends StatelessWidget {
     final o = old;
     final after = b.u.pts + (o != null && o.status != 'ยกเลิก' ? o.used * 15 - o.earn : 0) + b.earn - b.used * 15;
     return Scaffold(
-      appBar: AppBar(title: const Text('สรุปการจอง')),
-      body: ListView(children: [
-        card(Column(children: [
-          row('บอร์ดเกม', b.g.name),
-          row('จำนวนผู้เล่น', '${b.ppl} คน'),
-          row('วันที่', fmtD(b.date)),
-          row('เวลา', fmtT(b.start, b.hours)),
-          row('จำนวนชั่วโมง', b.full ? 'เหมาวัน' : '${b.hours} ชม.'),
-          row('โต๊ะ', 'โต๊ะ ${b.table}'),
-          if (b.used > 0) row('ส่วนลดแลกแต้ม', '-35 บาท'),
-          const Divider(),
-          row('ราคาที่ต้องชำระ', '${b.price} บาท'),
-          row('แต้มที่จะได้รับ', '+${b.earn} แต้ม'),
-        ])),
-        card(Row(children: [
-          const Icon(Icons.stars, color: acc, size: 40),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('คุณจะได้รับ +${b.earn} แต้ม', style: const TextStyle(color: acc, fontSize: 20, fontWeight: FontWeight.w900)),
-            Text('(${b.price} บาท ÷ 35 = ${b.earn} แต้ม)', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-            if (b.used > 0) const Text('ใช้แต้มแลกฟรี 1 ชม.: -15 แต้ม', style: TextStyle(color: Colors.white54, fontSize: 12)),
-            Text('แต้มสะสมหลังจองเสร็จ: $after แต้ม', style: const TextStyle(fontSize: 13)),
+        appBar: AppBar(title: const Text('สรุปการจอง')),
+        body: ListView(children: [
+          card(Column(children: [
+            row('บอร์ดเกม', b.g.name),
+            row('จำนวนผู้เล่น', '${b.ppl} คน'),
+            row('วันที่', fmtD(b.date)),
+            row('เวลา', fmtT(b.start, b.hours)),
+            row('จำนวนชั่วโมง', b.full ? 'เหมาวัน' : '${b.hours} ชม.'),
+            row('โต๊ะ', 'โต๊ะ ${b.table}'),
+            if (b.used > 0) row('ส่วนลดแลกแต้ม', '-35 บาท'),
+            const Divider(),
+            row('ราคาที่ต้องชำระ', '${b.price} บาท'),
+            row('แต้มที่จะได้รับ', '+${b.earn} แต้ม'),
           ])),
-        ])),
-        Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-                height: 50,
-                child: FilledButton(
-                    onPressed: () {
-                      final m = ScaffoldMessenger.of(context);
-                      S.i.save(b, old);
-                      Navigator.popUntil(context, (r) => r.isFirst);
-                      m.showSnackBar(SnackBar(content: Text('บันทึกการจองแล้ว ได้รับ ${b.earn} แต้ม')));
-                    },
-                    child: const Text('ยืนยันการจอง')))),
-      ]));
+          card(Row(children: [
+            const Icon(Icons.stars, color: acc, size: 40),
+            const SizedBox(width: 14),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('คุณจะได้รับ +${b.earn} แต้ม', style: const TextStyle(color: acc, fontSize: 20, fontWeight: FontWeight.w900)),
+              Text('(${b.price} บาท ÷ 35 = ${b.earn} แต้ม)', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              if (b.used > 0) const Text('ใช้แต้มแลกฟรี 1 ชม.: -15 แต้ม', style: TextStyle(color: Colors.white54, fontSize: 12)),
+              Text('แต้มสะสมหลังจองเสร็จ: $after แต้ม', style: const TextStyle(fontSize: 13)),
+            ])),
+          ])),
+          Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                  height: 50,
+                  child: FilledButton(
+                      onPressed: () {
+                        final m = ScaffoldMessenger.of(context);
+                        S.i.save(b, old);
+                        Navigator.popUntil(context, (r) => r.isFirst);
+                        m.showSnackBar(SnackBar(content: Text('บันทึกการจองแล้ว ได้รับ ${b.earn} แต้ม')));
+                      },
+                      child: const Text('ยืนยันการจอง')))),
+        ]));
   }
 }
 
@@ -598,7 +607,7 @@ class HistoryTab extends StatelessWidget {
         card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [Expanded(child: Text('#${b.id} ${b.g.name}', style: const TextStyle(fontWeight: FontWeight.bold))), Text(b.status, style: TextStyle(color: b.status == 'ยกเลิก' ? Colors.redAccent : Colors.greenAccent))]),
           const SizedBox(height: 6),
-          Text('${fmtD(b.date)}  ${fmtT(b.start, b.hours)}  • โต๊ะ ${b.table} • ${b.ppl} คน'),
+          Text('${fmtD(b.date)}  ${fmtT(b.start, b.hours)}  • โต๊ะ ${b.table} ${b.ppl} คน'),
           Text('${b.price} บาท • +${b.earn} แต้ม', style: const TextStyle(color: acc)),
           if (b.status != 'ยกเลิก')
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
@@ -720,9 +729,24 @@ class _AdminHomeState extends State<AdminHome> {
         builder: (_, __) {
           final n = S.i.notes.length;
           return Scaffold(
-              appBar: AppBar(title: const Row(children: [Logo(36), SizedBox(width: 10), Text('ARTBOARD ADMIN', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2))]), actions: [
+              appBar: AppBar(title: const Row(children: [Logo(30), SizedBox(width: 10), Text('ARTBOARD ADMIN', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2))]), actions: [
                 IconButton(
-                    icon: Badge(label: Text('$n'), isLabelVisible: n > 0, child: const Icon(Icons.notifications_outlined)),
+                    icon: Stack(
+                      children: [
+                        const Icon(Icons.notifications_outlined),
+                        if (n > 0)
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: const BoxDecoration(color: acc, shape: BoxShape.circle),
+                              constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                              child: Text('$n', style: const TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                            ),
+                          )
+                      ],
+                    ),
                     onPressed: () => showDialog(
                         context: context,
                         builder: (d) => AlertDialog(title: const Text('การแจ้งเตือน'), content: SizedBox(width: double.maxFinite, child: n == 0 ? const Text('ไม่มีการแจ้งเตือนใหม่') : ListView(shrinkWrap: true, children: [for (final x in S.i.notes.reversed) ListTile(dense: true, title: Text(x))])), actions: [
@@ -750,17 +774,34 @@ class TablesAdmin extends StatelessWidget {
     final now = DateTime.now();
     return ListView(padding: const EdgeInsets.all(8), children: [
       const Padding(padding: EdgeInsets.all(8), child: Text('แผนผังโต๊ะ (ตอนนี้) — แตะเพื่อปิด/เปิดโต๊ะ', style: TextStyle(color: Colors.white60))),
-      GridView.count(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 3, mainAxisSpacing: 10, crossAxisSpacing: 10, padding: const EdgeInsets.all(8), children: [
-        for (final t in [1, 2, 3])
-          Builder(builder: (_) {
-            final closed = S.i.closed.contains(t);
-            final busy = !closed && !S.i.free(t, now, now.hour, 1);
-            final c = closed ? Colors.grey : busy ? Colors.redAccent : Colors.greenAccent;
-            return InkWell(
-                onTap: () { closed ? S.i.closed.remove(t) : S.i.closed.add(t); S.i.ping(); },
-                child: Container(decoration: neon(c: c, w: 2, a: .8), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.table_restaurant, color: c, size: 36), Text('โต๊ะ $t', style: const TextStyle(fontWeight: FontWeight.bold)), Text(closed ? 'ปิด' : busy ? 'ไม่ว่าง' : 'ว่าง', style: TextStyle(color: c))])));
-          })
-      ]),
+      GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 3,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          padding: const EdgeInsets.all(8),
+          children: [
+            for (final t in [1, 2, 3])
+              Builder(builder: (_) {
+                final closed = S.i.closed.contains(t);
+                final busy = !closed && !S.i.free(t, now, now.hour, 1);
+                final c = closed ? Colors.grey : busy ? Colors.redAccent : Colors.greenAccent;
+                return InkWell(
+                    onTap: () {
+                      closed ? S.i.closed.remove(t) : S.i.closed.add(t);
+                      S.i.ping();
+                    },
+                    child: Container(
+                        decoration: neon(c: c, w: 2, a: .8),
+                        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Icon(Icons.table_restaurant, color: c, size: 36),
+                          const SizedBox(height: 6),
+                          Text('โต๊ะ $t', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          Text(closed ? 'ปิดใช้งาน' : busy ? 'ไม่ว่าง' : 'ว่าง', style: TextStyle(color: c, fontSize: 12)),
+                        ])));
+              })
+          ]),
     ]);
   }
 }
@@ -769,76 +810,134 @@ class QueueAdmin extends StatelessWidget {
   const QueueAdmin({super.key});
   @override
   Widget build(BuildContext context) {
-    final l = [...S.i.bookings]..sort((a, b) => a.date.compareTo(b.date) != 0 ? a.date.compareTo(b.date) : a.start.compareTo(b.start));
-    if (l.isEmpty) return const Center(child: Text('ยังไม่มีคิวจอง'));
+    final l = S.i.bookings.reversed.toList();
+    if (l.isEmpty) return const Center(child: Text('ยังไม่มีคิวการจอง'));
     return ListView(children: [
       for (final b in l)
-        card(Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('#${b.id} ${b.u.name}  (${b.u.phone})', style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text(b.g.name, style: const TextStyle(color: Colors.white60)),
-            Text('${fmtD(b.date)} ${fmtT(b.start, b.hours)} • โต๊ะ ${b.table} • ${b.ppl} คน • ${b.price} บาท'),
-          ])),
-          b.status == 'ยกเลิก' ? const Text('ยกเลิก', style: TextStyle(color: Colors.redAccent)) : IconButton(icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent), onPressed: () => S.i.cancel(b)),
-        ])),
+        card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text('#${b.id} ${b.u.name} — ${b.g.name}', style: const TextStyle(fontWeight: FontWeight.bold))),
+            Text(b.status, style: TextStyle(color: b.status == 'ยกเลิก' ? Colors.redAccent : Colors.greenAccent))
+          ]),
+          const SizedBox(height: 6),
+          Text('${fmtD(b.date)}  ${fmtT(b.start, b.hours)}  • โต๊ะ ${b.table} (${b.ppl} คน)'),
+          Text('${b.price} บาท • โทร: ${b.u.phone}', style: const TextStyle(color: Colors.white60)),
+          if (b.status != 'ยกเลิก')
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                  onPressed: () => S.i.cancel(b),
+                  child: const Text('ยกเลิกคิวนี้', style: TextStyle(color: Colors.redAccent))),
+            )
+        ]))
     ]);
   }
 }
 
 class GamesAdmin extends StatelessWidget {
   const GamesAdmin({super.key});
-  void form(BuildContext c, [Game? g]) {
-    final n = TextEditingController(text: g?.name), d = TextEditingController(text: g?.desc), mn = TextEditingController(text: '${g?.min ?? 2}'), mx = TextEditingController(text: '${g?.max ?? 4}'), df = TextEditingController(text: g?.diff ?? 'ปานกลาง'), tm = TextEditingController(text: '${g?.mins ?? 30}'), im = TextEditingController(text: g?.img ?? '');
+
+  void _showAddGameDialog(BuildContext context) {
+    final nameC = TextEditingController();
+    final descC = TextEditingController();
+    final minC = TextEditingController(text: '2');
+    final maxC = TextEditingController(text: '4');
+    final minsC = TextEditingController(text: '30');
+    String diff = 'ปานกลาง';
+
     showDialog(
-        context: c,
-        builder: (x) => AlertDialog(
-                title: Text(g == null ? 'เพิ่มเกม' : 'แก้ไขเกม'),
-                content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [tf(n, 'ชื่อเกม'), tf(d, 'รายละเอียดการเล่น'), tf(mn, 'ผู้เล่นขั้นต่ำ', k: TextInputType.number), tf(mx, 'ผู้เล่นสูงสุด', k: TextInputType.number), tf(df, 'ระดับความยาก'), tf(tm, 'ระยะเวลา (นาที)', k: TextInputType.number), tf(im, 'รูปเกม (เช่น assets/games/codenames.png)')])),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(x), child: const Text('ยกเลิก')),
-                  FilledButton(
-                      onPressed: () {
-                        if (n.text.trim().isEmpty) return;
-                        final a = int.tryParse(mn.text) ?? 2, b = int.tryParse(mx.text) ?? 4, m = int.tryParse(tm.text) ?? 30;
-                        if (g == null) {
-                          S.i.games.add(Game(n.text.trim(), d.text.trim(), a, b, df.text.trim(), m, im.text.trim()));
-                        } else {
-                          g..name = n.text.trim()..desc = d.text.trim()..min = a..max = b..diff = df.text.trim()..mins = m..img = im.text.trim();
-                        }
-                        S.i.ping();
-                        Navigator.pop(x);
-                      },
-                      child: const Text('บันทึก'))
-                ]));
+      context: context,
+      builder: (d) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: const Text('เพิ่มบอร์ดเกมใหม่'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                tf(nameC, 'ชื่อเกม'),
+                tf(descC, 'คำอธิบาย'),
+                Row(
+                  children: [
+                    Expanded(child: tf(minC, 'คนน้อยสุด', k: TextInputType.number)),
+                    const SizedBox(width: 8),
+                    Expanded(child: tf(maxC, 'คนมากสุด', k: TextInputType.number)),
+                  ],
+                ),
+                tf(minsC, 'เวลาที่ใช้ (นาที)', k: TextInputType.number),
+                DropdownButtonFormField<String>(
+                  value: diff,
+                  decoration: const InputDecoration(labelText: 'ความยาก', border: OutlineInputBorder()),
+                  items: const [
+                    DropdownMenuItem(value: 'ง่าย', child: Text('ง่าย')),
+                    DropdownMenuItem(value: 'ปานกลาง', child: Text('ปานกลาง')),
+                    DropdownMenuItem(value: 'ยาก', child: Text('ยาก')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setStateDialog(() => diff = v);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(d), child: const Text('ยกเลิก')),
+            FilledButton(
+              onPressed: () {
+                final name = nameC.text.trim();
+                if (name.isEmpty) return snack(context, 'กรุณากรอกชื่อเกม');
+                final min = int.tryParse(minC.text) ?? 2;
+                final max = int.tryParse(maxC.text) ?? 4;
+                final mins = int.tryParse(minsC.text) ?? 30;
+
+                S.i.games.add(Game(name, descC.text.trim(), min, max, diff, mins));
+                S.i.ping();
+                Navigator.pop(d);
+                snack(context, 'เพิ่มเกม $name สำเร็จ');
+              },
+              child: const Text('เพิ่มเกม'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-      backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton(onPressed: () => form(context), child: const Icon(Icons.add)),
-      body: ListView(padding: const EdgeInsets.only(bottom: 80), children: [
-        for (final g in S.i.games)
-          GameCard(g, trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-            IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => form(context, g)),
-            IconButton(icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent), onPressed: () { S.i.games.remove(g); S.i.ping(); }),
-          ])),
-      ]));
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: ListView(
+        children: [for (final g in S.i.games) GameCard(g)],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddGameDialog(context),
+        icon: const Icon(Icons.add),
+        label: const Text('เพิ่มเกม'),
+        backgroundColor: acc,
+        foregroundColor: Colors.black,
+      ),
+    );
+  }
 }
 
 class PointsAdmin extends StatelessWidget {
   const PointsAdmin({super.key});
   @override
   Widget build(BuildContext context) {
-    final l = S.i.users.where((u) => !u.admin).toList();
-    if (l.isEmpty) return const Center(child: Text('ยังไม่มีสมาชิก'));
+    final users = S.i.users.where((x) => !x.admin).toList();
+    if (users.isEmpty) return const Center(child: Text('ยังไม่มีลูกค้าลงทะเบียน'));
     return ListView(children: [
-      for (final u in l)
-        card(Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(u.name, style: const TextStyle(fontWeight: FontWeight.bold)), Text('${u.pts} แต้ม', style: const TextStyle(color: acc, fontSize: 18))])),
-          IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: u.pts > 0 ? () { u.pts--; S.i.ping(); } : null),
-          IconButton(icon: const Icon(Icons.add_circle_outline, color: acc), onPressed: () { u.pts++; S.i.ping(); }),
-          TextButton(onPressed: () { u.pts++; S.i.ping(); }, child: const Text('สตอรี่ +1')),
-        ])),
+      for (final u in users)
+        card(ListTile(
+          title: Text(u.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text('แต้มสะสม: ${u.pts} แต้ม'),
+          trailing: IconButton(
+              icon: const Icon(Icons.add_circle, color: acc),
+              onPressed: () {
+                u.pts += 1;
+                S.i.ping();
+                snack(context, 'เพิ่ม 1 แต้มให้ ${u.name} แล้ว');
+              }),
+        ))
     ]);
   }
 }
@@ -847,15 +946,17 @@ class ChatsAdmin extends StatelessWidget {
   const ChatsAdmin({super.key});
   @override
   Widget build(BuildContext context) {
-    final l = S.i.users.where((u) => !u.admin).toList();
-    if (l.isEmpty) return const Center(child: Text('ยังไม่มีลูกค้า'));
+    final users = S.i.users.where((x) => !x.admin).toList();
+    if (users.isEmpty) return const Center(child: Text('ยังไม่มีลูกค้า'));
     return ListView(children: [
-      for (final u in l)
-        ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.person)),
-            title: Text(u.name),
-            subtitle: Text((S.i.chats[u]?.isNotEmpty ?? false) ? S.i.chats[u]!.last.t : 'ยังไม่มีข้อความ', maxLines: 1, overflow: TextOverflow.ellipsis),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(u, true)))),
+      for (final u in users)
+        card(ListTile(
+          leading: const Icon(Icons.account_circle, size: 36),
+          title: Text(u.name),
+          subtitle: Text('ข้อความล่าสุด: ${(S.i.chats[u] != null && S.i.chats[u]!.isNotEmpty) ? S.i.chats[u]!.last.t : "ไม่มีการสนทนา"}'),
+          trailing: const Icon(Icons.chevron_right, color: acc),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(u, true))),
+        ))
     ]);
   }
 }
