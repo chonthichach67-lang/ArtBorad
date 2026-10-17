@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-
+import 'state/app_state.dart';
 import 'core/theme.dart';
 import 'screens/auth/login.dart';
 import 'widgets/tech_bg.dart';
 
-void main() => runApp(const ArtboardApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await S.i.init();
+  runApp(const ArtboardApp());
+}
 
 class ArtboardApp extends StatelessWidget {
   const ArtboardApp({super.key});
